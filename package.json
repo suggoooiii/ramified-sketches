@@ -1,0 +1,27 @@
+{
+  "name": "ramified-sketches",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noemit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "dat.gui": "^0.7.9",
+    "shader-park-core": "^0.2.6",
+    "ssam": "^0.18.2",
+    "three": "^0.161.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.4",
+    "vite": "^5.0.12",
+    "vite-plugin-glsl": "^1.2.1",
+    "vite-plugin-ssam-export": "^0.1.1",
+    "vite-plugin-ssam-ffmpeg": "^0.2.3",
+    "vite-plugin-ssam-git": "^0.1.2",
+    "vite-plugin-ssam-timelapse": "^0.1.2"
+  }
+}

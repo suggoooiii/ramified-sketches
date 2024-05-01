@@ -11,10 +11,6 @@ uniform float decay;  // Declare decay
 uniform float colorFactor; // Declare colorFactor
 uniform float modulationFactor; // Declare modulationFactor
 
-void adjustPointSize(inout float size) {
-  // Remap size from [-1, 1] to [0, 1]
-  size = (size + 1.0) / 2.0;
-}
 void main() {
   vec3 acc = attractor - position;
   vec3 vel = velocity + 0.05 * acc; // Attraction strength

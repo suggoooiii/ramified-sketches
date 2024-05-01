@@ -2,26 +2,17 @@ import * as THREE from "three";
 import * as dat from "dat.gui";
 import { ssam } from "ssam";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import furrVert from "./shaders/furrrmat.vert";
-import furrFrag from "./shaders/furrrmat.frag";
 import particlesVert from "./shaders/particlesystem.vert";
 import particlesFrag from "./shaders/particlesystem.frag";
 import metallicVert from "./shaders/metallic.vert";
 import metallicFrag from "./shaders/metallic.frag";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
-  // SCENE AND CAMERA
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color("black");
-  const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-  camera.position.set(0, 0, 10);
-
   // RENDERER
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
     powerPreference: "high-performance",
-    preserveDrawingBuffer: true,
   });
 
   renderer.setPixelRatio(pixelRatio);
@@ -30,9 +21,45 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
 
   document.body.appendChild(renderer.domElement);
 
+  // SCENE AND CAMERA
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  scene.add(new THREE.PolarGridHelper(30, 0));
+
+  const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+  camera.position.set(0, 0, 10);
+
   // CONTROLS
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+
+  const listener = new THREE.AudioListener();
+  camera.add(listener);
+
+  scene.add(camera);
+
+  // LIGHTS
+  //   const ambient = new THREE.AmbientLight(0x8c6239, 3);
+  //   scene.add(ambient);
+
+  //   const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
+  //   directionalLight.position.set(-1, 1, 1).normalize();
+  //   scene.add(directionalLight);
+
+  const sound = new THREE.Audio(listener);
+  const audioPlayer = document.getElementById("audioPlayer");
+  sound.setMediaElementSource(audioPlayer);
+  audioPlayer.play();
+
+  const oscillator = listener.context.createOscillator();
+
+  const audioLoader = new THREE.AudioLoader();
+
+  // create an AudioAnalyser, passing in the sound and desired fftSize
+  const analyser = new THREE.AudioAnalyser(sound, 32);
+
+  // get the average frequency of the sound
+  const data = analyser.getAverageFrequency();
 
   // Create a GUI instance
   const gui = new dat.GUI();
@@ -53,42 +80,30 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   };
 
   // Fur Shader
-  const furrgeometry = new THREE.SphereGeometry(5, 32, 32);
-
-  const furMaterial = new THREE.ShaderMaterial({
-    vertexShader: furrVert,
-    fragmentShader: furrFrag,
-    uniforms: {
-      time: { value: 0.0 },
-    },
-    // blending: THREE.MultiplyBlending,
-    // side: THREE.BackSide,
-    // depthTest: false,
-    // transparent: true,
-  });
+  const sphereGeo = new THREE.SphereGeometry(5, 32, 32);
 
   // Create a shader material
-  const metallicMat = new THREE.ShaderMaterial({
+  const silkMat = new THREE.ShaderMaterial({
     uniforms: {
       time: { value: 0.5 },
       noiseScale: { value: 1 },
       noiseStrength: { value: 0.1 },
-      silkColor: { value: new THREE.Color("blue") },
+      silkColor: { value: new THREE.Color("red").convertLinearToSRGB() },
       metalness: { value: 0.8 },
       roughness: { value: 0.2 },
     },
     vertexShader: metallicVert,
     fragmentShader: metallicFrag,
-    side: THREE.BackSide,
-    // blending: THREE.MultiplyBlending,
+    blending: THREE.AdditiveBlending,
     depthTest: false,
     // transparent: true,
-    // blendEquation: THREE.AddEquation,
-    // blendSrc: THREE.OneFactor,
+    blendEquation: THREE.MaxEquation,
     // blendDst: THREE.OneFactor,
   });
-  const furrsphere = new THREE.Mesh(furrgeometry, metallicMat);
-  scene.add(furrsphere);
+  const meshSphere = new THREE.Mesh(sphereGeo, silkMat);
+  scene.add(meshSphere);
+
+  meshSphere.add(sound);
 
   // Particle geometry and material using a shader
   const particles = 10000;
@@ -113,7 +128,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
 
   const material = new THREE.ShaderMaterial({
     uniforms: {
-      pointSize: { value: 0.2 },
+      pointSize: { value: 0.8 },
       attractor: { value: new THREE.Vector3(0, 0, 0) },
       time: { value: TWEAKS.time },
       colorFactor: { value: TWEAKS.colorFactor }, // Initial value for colorFactor
@@ -122,103 +137,97 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     },
     vertexShader: particlesVert,
     fragmentShader: particlesFrag,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.SubtractiveBlending,
     depthTest: false,
-    // transparent: true,
+    transparent: true,
   });
 
   const particleSystem = new THREE.Points(geometry, material);
   scene.add(particleSystem);
 
-  // Create a render target to hold trail effects
-  const renderTarget = new THREE.WebGLRenderTarget(512, 512, {
-    minFilter: THREE.LinearFilter,
-    magFilter: THREE.NearestFilter,
-    format: THREE.RGBAFormat,
-  });
+  const settings = gui.addFolder("GUI Settings");
+  const volumeFolder = gui.addFolder("Sound Volume");
+  const soundControlsFolder = gui.addFolder("Sound Controls");
 
-  // const trailMaterial = new THREE.ShaderMaterial({
-  //   uniforms: {
-  //     texture: { value: renderTarget.texture },
-  //     resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-  //     decay: { value: TWEAKS.decay }, // Controls how fast the trails fade; closer to 1 is slower
-  //   },
-  //   vertexShader: `
-  //   precision highp float;
-  //   varying vec2 vUv;
+  const audioSettings = gui.addFolder("Audio Settings");
 
-  //       void main() {
-  //           vUv = uv;
-  //           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  //       }
-  //   `,
-  //   fragmentShader: `
-  //       precision highp float;
+  const AUDIO_TWEAKS = {
+    volume: 1.0,
+    playbackRate: 1.0,
+    loop: false,
+    autoplay: true,
+    muted: false,
+    sampleRate: 48000,
+    outputLatency: 0.04,
+  };
 
-  //       uniform sampler2D texture;
-  //       uniform vec2 resolution;
-  //       uniform float decay;
-  //       varying vec2 vUv;
+  audioSettings
+    .add(AUDIO_TWEAKS, "sampleRate", [8000, 16000, 24000, 44100, 48000])
+    .onChange((value) => {
+      console.log("🚀 ~ .onChange ~ value:", value);
+      console.log(
+        "🚀 ~ .onChange ~ listener.context.sampleRate:",
+        listener.context.sampleRate,
+      );
+      // Update the sample rate of the AudioContext
+      listener.context.sampleRate = value;
+    });
 
-  //       void main() {
-  //         vec4 color = texture2D(texture, vUv) * decay;
-  //         gl_FragColor = vec4(color.rgb * decay,1.0);  // Apply decay to fade the trail
-  //       }
-  //   `,
-  //   blending: THREE.SubtractiveBlending,
-  //   // blendEquation: THREE.AddEquation,
-  //   depthTest: false,
-  //   // transparent: true,
-  // });
+  audioSettings
+    .add(AUDIO_TWEAKS, "outputLatency", 0.01, 1.0)
+    .step(0.01)
+    .onChange((value) => {
+      // Update the output latency of the AudioContext
+      listener.context.outputLatency = value;
+    });
 
-  // GUI for particle point size
-
-  gui.add(TWEAKS, "pointSize", 0.0, 100.0).onChange((value) => {
+  // GUI for point size
+  settings.add(TWEAKS, "pointSize", 0.0, 100.0).onChange((value) => {
     material.uniforms.pointSize.value = value;
   });
 
-  // GUI for attractor position
-  gui.add(TWEAKS, "attractorX", -5, 5).onChange((value) => {
+  // settings for attractor position
+  settings.add(TWEAKS, "attractorX", -5, 5).onChange((value) => {
     material.uniforms.attractor.value.x = value;
   });
-  gui.add(TWEAKS, "attractorY", -5, 5).onChange((value) => {
+  settings.add(TWEAKS, "attractorY", -5, 5).onChange((value) => {
     material.uniforms.attractor.value.y = value;
   });
 
-  gui.add(TWEAKS, "metalness", -5, 5).onChange((value) => {
-    metallicMat.uniforms.noiseScale.value = value;
+  settings.add(TWEAKS, "metalness", -5, 5).onChange((value) => {
+    silkMat.uniforms.noiseScale.value = value;
   });
-  gui.add(TWEAKS, "noiseScale", -5, 5).onChange((value) => {
-    metallicMat.uniforms.noiseStrength.value = value;
+  settings.add(TWEAKS, "noiseScale", -5, 5).onChange((value) => {
+    silkMat.uniforms.noiseStrength.value = value;
   });
-  gui.add(TWEAKS, "noiseStrength", -5, 5).onChange((value) => {
-    metallicMat.uniforms.noiseStrength.value = value;
-  });
-
-  gui.add(TWEAKS, "roughness", -5, 5).onChange((value) => {
-    metallicMat.uniforms.roughness.value = value;
+  settings.add(TWEAKS, "noiseStrength", -5, 5).onChange((value) => {
+    silkMat.uniforms.noiseStrength.value = value;
   });
 
-  gui
+  settings.add(TWEAKS, "roughness", -5, 5).onChange((value) => {
+    silkMat.uniforms.roughness.value = value;
+  });
+
+  settings
     .add(TWEAKS, "decay", -1.0, 200.0)
     .step(0.01)
     .onChange((value) => {
       material.uniforms.decay.value = value;
     });
-  // GUI control for colorFactor
-  gui
+  // settings control for colorFactor
+  settings
     .add(TWEAKS, "colorFactor", -1.0, 20.0)
     .step(0.1)
     .onChange((value) => {
       material.uniforms.colorFactor.value = value;
     });
-  gui
+  settings
     .add(TWEAKS, "modulationFactor", -1.0, 20.0)
     .step(0.1)
     .onChange((value) => {
       material.uniforms.modulationFactor.value = value;
     });
-  gui
+  settings
     .add(TWEAKS, "time", 0.1, 1000.0)
     .step(0.1)
     .onChange((value) => {
@@ -229,15 +238,16 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     const anim = playhead * Math.PI * 0.05;
     const anim2 = Math.sin(Math.sqrt(9 ^ (2 - playhead) ^ 2)) * playhead;
     material.uniforms.time.value += 0.05;
-    metallicMat.uniforms.time.value += 0.05;
+    silkMat.uniforms.time.value += anim;
     material.uniforms.decay.value = TWEAKS.decay;
     material.uniforms.colorFactor.value = TWEAKS.colorFactor;
     geometry.attributes.position.needsUpdate = true;
     geometry.attributes.velocity.needsUpdate = true;
     geometry.attributes.acolor.needsUpdate = true;
     geometry.attributes.size.needsUpdate = true;
-    furMaterial.uniforms.time.value += 0.005;
-    metallicMat.uniformsNeedUpdate = true;
+    silkMat.uniforms.time.value += 0.005;
+    silkMat.uniformsNeedUpdate = true;
+    // material.uniformsNseedUpdat = true;
 
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);

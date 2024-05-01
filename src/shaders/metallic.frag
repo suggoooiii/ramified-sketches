@@ -15,7 +15,7 @@ void main() {
     vec3 viewDir = normalize(cameraPosition - vPosition);
 
     // Calculate the reflection vector
-    vec3 reflectDir = reflect(-viewDir, normal);
+    vec3 reflectDir = reflect(-viewDir, -normal);
 
     // Calculate the specular highlight
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);

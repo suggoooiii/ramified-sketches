@@ -17,6 +17,7 @@ export default defineConfig({
     // ssamTimelapse(),
   ],
   clearScreen: false,
+  assetsInclude: ["**/*.hdr"],
   build: {
     outDir: "./dist",
     assetsDir: ".",

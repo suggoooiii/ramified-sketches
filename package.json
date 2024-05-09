@@ -11,9 +11,10 @@
   },
   "dependencies": {
     "dat.gui": "^0.7.9",
+    "maath": "^0.10.7",
     "shader-park-core": "^0.2.6",
     "ssam": "^0.18.2",
-    "three": "^0.161.0"
+    "three": "^0.155.0"
   },
   "devDependencies": {
     "prettier": "^3.2.4",

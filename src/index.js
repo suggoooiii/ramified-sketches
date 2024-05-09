@@ -2,10 +2,14 @@ import * as THREE from "three";
 import * as dat from "dat.gui";
 import { ssam } from "ssam";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { createSculptureWithGeometry } from "shader-park-core";
+import shaderPark from "./sp-code";
 import particlesVert from "./shaders/particlesystem.vert";
 import particlesFrag from "./shaders/particlesystem.frag";
 import metallicVert from "./shaders/metallic.vert";
 import metallicFrag from "./shaders/metallic.frag";
+import bufferfrag from "./shaders/bufferMat.frag";
+import buffervert from "./shaders/bufferMat.vert";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   // RENDERER
@@ -16,7 +20,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   });
 
   renderer.setPixelRatio(pixelRatio);
-  renderer.setClearColor(0xffffff, 0);
+  renderer.setClearColor(0xffffff, 1);
   renderer.setSize(width, height);
 
   document.body.appendChild(renderer.domElement);
@@ -38,13 +42,8 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
 
   scene.add(camera);
 
-  // LIGHTS
-  //   const ambient = new THREE.AmbientLight(0x8c6239, 3);
-  //   scene.add(ambient);
-
-  //   const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
-  //   directionalLight.position.set(-1, 1, 1).normalize();
-  //   scene.add(directionalLight);
+  // clock
+  const clock = new THREE.Clock();
 
   const sound = new THREE.Audio(listener);
   const audioPlayer = document.getElementById("audioPlayer");
@@ -59,7 +58,6 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const analyser = new THREE.AudioAnalyser(sound, 32);
 
   // get the average frequency of the sound
-  const data = analyser.getAverageFrequency();
 
   // Create a GUI instance
   const gui = new dat.GUI();
@@ -97,19 +95,17 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     blending: THREE.AdditiveBlending,
     depthTest: false,
     // transparent: true,
-    blendEquation: THREE.MaxEquation,
     // blendDst: THREE.OneFactor,
   });
   const meshSphere = new THREE.Mesh(sphereGeo, silkMat);
-  scene.add(meshSphere);
-
-  meshSphere.add(sound);
+  // scene.add(meshSphere);
+  // meshSphere.add(sound);
 
   // Particle geometry and material using a shader
   const particles = 10000;
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(particles * 3);
-  const velocities = new Float32Array(particles * 1);
+  const velocities = new Float32Array(particles * 2);
   const colors = new Float32Array(particles * 3);
   const sizes = new Float32Array(particles);
 
@@ -123,12 +119,12 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   }
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
-  geometry.setAttribute("acolor", new THREE.BufferAttribute(colors, 3));
-  geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute("acolor", new THREE.BufferAttribute(colors, 3, true));
+  geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1, true));
 
   const material = new THREE.ShaderMaterial({
     uniforms: {
-      pointSize: { value: 0.8 },
+      pointSize: { value: 2.8 },
       attractor: { value: new THREE.Vector3(0, 0, 0) },
       time: { value: TWEAKS.time },
       colorFactor: { value: TWEAKS.colorFactor }, // Initial value for colorFactor
@@ -137,14 +133,114 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     },
     vertexShader: particlesVert,
     fragmentShader: particlesFrag,
-    blending: THREE.SubtractiveBlending,
+    blending: THREE.AdditiveBlending,
     depthTest: false,
     transparent: true,
   });
 
   const particleSystem = new THREE.Points(geometry, material);
-  scene.add(particleSystem);
+  // scene.add(particleSystem);
 
+  const buffergeo = new THREE.BufferGeometry();
+
+  const numPoints = 10000; // Number of points in the geometry
+
+  const points = new Float32Array(numPoints * 3);
+  const indices = new Float32Array(numPoints);
+
+  for (let i = 0; i < numPoints; i++) {
+    const angle = (i / numPoints) * Math.PI * 2;
+    const x = Math.cos(angle);
+    const y = Math.sin(angle);
+    const z = 0;
+
+    points[i * 3] = x;
+    points[i * 3 + 1] = y;
+    points[i * 3 + 2] = z;
+
+    indices[i] = i;
+  }
+
+  buffergeo.setAttribute("position", new THREE.BufferAttribute(points, 3));
+  buffergeo.setAttribute("index", new THREE.BufferAttribute(indices, 1));
+
+  const buffermat = new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      r1: { value: 700 },
+      r2: { value: 813 },
+      color: { value: new THREE.Color(0, 0, 0) },
+      vertexShader: buffervert,
+      fragmentShader: bufferfrag,
+    },
+  });
+
+  // const mesh = new THREE.Mesh(buffergeo, buffermat);
+  const geometryy = new THREE.SphereGeometry(1, 32, 32);
+
+  // sp code mat
+  let spmesh = createSculptureWithGeometry(geometryy, shaderPark(), () => {
+    return {
+      time: clock.getElapsedTime(),
+      mouse: mouse,
+      size: 0.5,
+    };
+  });
+
+  // Create a new Three.js mouse vector
+  const mouse = new THREE.Vector2();
+
+  // Add an event listener for mouse movement
+  window.addEventListener("mousemove", onMouseMove, false);
+
+  // Update the mouse vector based on the mouse position
+  function onMouseMove(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  }
+  // Create a Three.js geometry
+
+  // Create the Shader Park mesh using the geometry
+  const mesh = createSculptureWithGeometry(
+    new THREE.SphereGeometry(1, 32, 32),
+    spCode(),
+    () => {
+      return {
+        time: clock.getElapsedTime(),
+        mouse: mouse,
+      };
+    },
+  );
+
+  // Add the mesh to your Three.js scene
+  scene.add(mesh);
+  mesh.position.set(2, 2, 0);
+
+  scene.add(spmesh);
+
+  function spCode() {
+    return `
+    setMaxIterations(5);
+    let pointerDown = input();
+    
+    let s = getSpace();
+    let r = getRayDirection();
+    
+    let n = noise(s + vec3(0, 0, time*.1));
+    let n1 = noise(r * 4 + vec3(0, 0, time*.1));
+    
+    metal(n*.5+.5 + n1);
+    shine(n1*.5+.5 * n1);
+    
+    color(normal * .1 + vec3(n1, n, 1));
+    boxFrame(vec3(2), abs(n) * .1 + .04 * abs(n1));
+    sphere(n1 * n1);
+    mixGeo(pointerDown);
+    sphere(n * .5  +  .8);
+  `;
+  }
+
+  // gui
   const settings = gui.addFolder("GUI Settings");
   const volumeFolder = gui.addFolder("Sound Volume");
   const soundControlsFolder = gui.addFolder("Sound Controls");
@@ -235,19 +331,36 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     });
 
   wrap.render = ({ playhead }) => {
-    const anim = playhead * Math.PI * 0.05;
-    const anim2 = Math.sin(Math.sqrt(9 ^ (2 - playhead) ^ 2)) * playhead;
-    material.uniforms.time.value += 0.05;
-    silkMat.uniforms.time.value += anim;
-    material.uniforms.decay.value = TWEAKS.decay;
-    material.uniforms.colorFactor.value = TWEAKS.colorFactor;
-    geometry.attributes.position.needsUpdate = true;
-    geometry.attributes.velocity.needsUpdate = true;
-    geometry.attributes.acolor.needsUpdate = true;
-    geometry.attributes.size.needsUpdate = true;
-    silkMat.uniforms.time.value += 0.005;
-    silkMat.uniformsNeedUpdate = true;
-    // material.uniformsNseedUpdat = true;
+    // const data = analyser.getAverageFrequency();
+
+    // const hue = data / 256; // Normalize data to 0-1 range
+    // const color = new THREE.Color().setHSL(hue, 1, 0.5);
+
+    // // silk mat
+    // silkMat.uniforms.noiseStrength.value = data / 256; // Adjust range as needed
+    // silkMat.uniforms.silkColor.value = color;
+    // silkMat.uniforms.time.value += data / 512;
+    // silkMat.uniforms.metalness.value = data / 512;
+
+    // // particle mat
+    // material.uniforms.decay.value = data / 256;
+    // material.uniforms.colorFactor.value = data / 256;
+    // material.uniforms.time.value += data / 512;
+    // material.uniforms.modulationFactor.value = data / 256; // Normalize data to 0-1 range
+
+    // // attribute update
+    // geometry.attributes.position.needsUpdate = true;
+    // geometry.attributes.velocity.needsUpdate = true;
+    // geometry.attributes.acolor.needsUpdate = true;
+    // geometry.attributes.size.needsUpdate = true;
+
+    // buffermat.uniforms.time.value += playhead;
+    // buffermat.uniforms.r1.value = playhead;
+    // buffermat.uniforms.r2.value = playhead;
+
+    // // uniforms needupdate
+    // material.uniformsNeedUpdate = true;
+    // silkMat.uniformsNeedUpdate = true;
 
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);
